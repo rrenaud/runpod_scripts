@@ -15,6 +15,8 @@ import requests
 from pathlib import Path
 from typing import Optional, Tuple, Dict, Any
 
+VSCODE_START_DIR = '/workspace/assignment5-alignment'
+
 
 class PodManager:
     def __init__(self):
@@ -99,6 +101,7 @@ class PodManager:
             id
             imageName
             machineId
+            costPerHr
             machine {
               podHostId
             }
@@ -143,9 +146,13 @@ class PodManager:
 
             pod_data = result["data"]["podFindAndDeployOnDemand"]
             pod_id = pod_data["id"]
+            cost_per_hr = pod_data.get("costPerHr")
 
             print(f"\n✓ Pod created successfully!")
             print(f"  Pod ID: {pod_id}")
+            if cost_per_hr is None:
+                raise ValueError("Hourly cost not found in API response")
+            print(f"  Hourly Cost: ${cost_per_hr:.3f}/hr")
 
             return pod_id
 
@@ -350,7 +357,7 @@ Host {ssh_host_alias}
         print("\nLaunching VSCode...")
 
         import subprocess
-        cmd = ["code", "--remote", f"ssh-remote+{ssh_host_alias}", "/workspace"]
+        cmd = ["code", "--remote", f"ssh-remote+{ssh_host_alias}", VSCODE_START_DIR]
 
         try:
             # Launch VSCode without waiting for it to complete
