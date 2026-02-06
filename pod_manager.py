@@ -284,15 +284,13 @@ Host {ssh_host_alias}
         print("  SSH config updated!")
         return ssh_host_alias
 
-    def test_ssh_connection(self, ssh_host: str, ssh_port: str) -> bool:
-        """Test SSH connection to the pod."""
-        print("\nWaiting for SSH service to be fully ready...")
-        time.sleep(15)
+    def test_ssh_connection(self, ssh_host: str, ssh_port: str, max_attempts: int = 30) -> bool:
+        """Poll SSH connection until it succeeds or we give up."""
+        print("\nWaiting for SSH service to be ready...")
 
-        print("Testing SSH connection...")
         cmd = [
             "ssh",
-            "-o", "ConnectTimeout=10",
+            "-o", "ConnectTimeout=5",
             "-o", "BatchMode=yes",
             "-o", "StrictHostKeyChecking=no",
             "-i", str(self.ssh_key_path),
@@ -301,18 +299,21 @@ Host {ssh_host_alias}
             "echo 'SSH connection successful!'",
         ]
 
-        try:
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
-            if result.returncode == 0:
-                print("  SSH test passed!")
-                return True
-            else:
-                print("  SSH test failed, but continuing to launch VSCode...")
-                print(f"  Error: {result.stderr}")
-                return False
-        except Exception as e:
-            print(f"  SSH test failed ({e}), but continuing to launch VSCode...")
-            return False
+        for attempt in range(1, max_attempts + 1):
+            try:
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+                if result.returncode == 0:
+                    print(f"  SSH ready after {attempt} attempt(s)!")
+                    return True
+            except subprocess.TimeoutExpired:
+                pass
+            except Exception:
+                pass
+            print(f"  Attempt {attempt}/{max_attempts} - not ready yet...")
+            time.sleep(5)
+
+        print("  SSH did not become ready within timeout, continuing anyway...")
+        return False
 
     def launch_vscode(self, ssh_host_alias: str):
         """Launch VSCode connected to the pod."""
