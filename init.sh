@@ -39,6 +39,14 @@ chown $USERNAME:$USERNAME "$CLAUDE_PERSIST" || true
 ln -sfn "$CLAUDE_PERSIST" "$USER_HOME/.claude"
 chown -h $USERNAME:$USERNAME "$USER_HOME/.claude"
 
+# Git identity
+su - $USERNAME -c 'git config --global user.email "rrenaud@gmail.com"'
+su - $USERNAME -c 'git config --global user.name "Rob Neuhaus"'
+
+# Copy persistent config files into ~/.claude
+cp /workspace/init/keybindings.json "$USER_HOME/.claude/keybindings.json" 2>/dev/null || true
+chown $USERNAME:$USERNAME "$USER_HOME/.claude/keybindings.json" 2>/dev/null || true
+
 # Source RunPod env + add claude to PATH in user's bashrc
 cat >> "$USER_HOME/.bashrc" <<'BASHRC'
 [ -f /etc/rp_environment ] && source /etc/rp_environment
