@@ -39,9 +39,10 @@ chown $USERNAME:$USERNAME "$CLAUDE_PERSIST" || true
 ln -sfn "$CLAUDE_PERSIST" "$USER_HOME/.claude"
 chown -h $USERNAME:$USERNAME "$USER_HOME/.claude"
 
-# Git identity
+# Git identity and credentials
 su - $USERNAME -c 'git config --global user.email "rrenaud@gmail.com"'
 su - $USERNAME -c 'git config --global user.name "Rob Neuhaus"'
+su - $USERNAME -c 'git config --global credential.helper "store --file /workspace/.git-credentials"'
 
 # Copy persistent config files into ~/.claude
 cp /workspace/init/keybindings.json "$USER_HOME/.claude/keybindings.json" 2>/dev/null || true
