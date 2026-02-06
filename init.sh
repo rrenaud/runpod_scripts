@@ -12,7 +12,7 @@ groupadd -g $USER_GID $USERNAME 2>/dev/null || true
 useradd -m -u $USER_UID -g $USER_GID -s /bin/bash $USERNAME 2>/dev/null || true
 
 # Passwordless sudo
-apt-get update -qq && apt-get install -y -qq sudo > /dev/null 2>&1 || true
+apt-get update -qq && apt-get install -y -qq sudo tmux nano bat > /dev/null 2>&1 || true
 echo "$USERNAME ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/$USERNAME
 
 # SSH access for non-root user (reuses RunPod's PUBLIC_KEY env var)
@@ -30,7 +30,7 @@ curl -fsSL https://deb.nodesource.com/setup_22.x | bash - > /dev/null 2>&1
 apt-get install -y -qq nodejs > /dev/null 2>&1 || true
 
 # Install Claude Code for the user
-su - $USERNAME -c 'curl -fsSL https://claude.ai/install.sh | sh' || true
+su - $USERNAME -c 'curl -fsSL https://claude.ai/install.sh | bash' || true
 
 # Persistent Claude config: symlink ~/.claude -> /workspace/.claude_home
 CLAUDE_PERSIST="/workspace/.claude_home"
@@ -43,8 +43,16 @@ chown -h $USERNAME:$USERNAME "$USER_HOME/.claude"
 cat >> "$USER_HOME/.bashrc" <<'BASHRC'
 [ -f /etc/rp_environment ] && source /etc/rp_environment
 export PATH="$HOME/.local/bin:$PATH"
+export LESS='-R -i -M -F -X'
+export PAGER="less"
+if command -v batcat &> /dev/null; then
+    alias bat='batcat'
+fi
 BASHRC
 chown $USERNAME:$USERNAME "$USER_HOME/.bashrc"
 
 # Own /workspace as the non-root user
 chown -R $USERNAME:$USERNAME /workspace || true
+
+# Launch Claude Code in a tmux session
+su - $USERNAME -c 'tmux new-session -d -s claude -c /workspace "claude --dangerously-skip-permissions"' || true

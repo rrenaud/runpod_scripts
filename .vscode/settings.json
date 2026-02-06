@@ -1,0 +1,9 @@
+{
+  "terminal.integrated.profiles.linux": {
+    "tmux-claude": {
+      "path": "tmux",
+      "args": ["attach", "-t", "claude"]
+    }
+  },
+  "terminal.integrated.defaultProfile.linux": "tmux-claude"
+}
