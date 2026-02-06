@@ -25,6 +25,10 @@ if [ -n "$PUBLIC_KEY" ]; then
     chown -R $USERNAME:$USERNAME "$USER_HOME/.ssh"
 fi
 
+# Install Node.js (required by Claude Code)
+curl -fsSL https://deb.nodesource.com/setup_22.x | bash - > /dev/null 2>&1
+apt-get install -y -qq nodejs > /dev/null 2>&1 || true
+
 # Install Claude Code for the user
 su - $USERNAME -c 'curl -fsSL https://claude.ai/install.sh | sh' || true
 
