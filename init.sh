@@ -1,8 +1,7 @@
 #!/bin/bash
 # pre_start.sh hook for RunPod pods.
 # Sets up non-root user 'rrenaud' with SSH, sudo, and Claude Code.
-# Symlinked to /pre_start.sh via dockerArgs so it runs before /start.sh.
-set -e
+# Run explicitly via bash in dockerArgs before /start.sh.
 
 USERNAME="rrenaud"
 USER_UID=1000
@@ -32,7 +31,7 @@ su - $USERNAME -c 'curl -fsSL https://claude.ai/install.sh | sh' || true
 # Persistent Claude config: symlink ~/.claude -> /workspace/.claude_home
 CLAUDE_PERSIST="/workspace/.claude_home"
 mkdir -p "$CLAUDE_PERSIST"
-chown $USERNAME:$USERNAME "$CLAUDE_PERSIST"
+chown $USERNAME:$USERNAME "$CLAUDE_PERSIST" || true
 ln -sfn "$CLAUDE_PERSIST" "$USER_HOME/.claude"
 chown -h $USERNAME:$USERNAME "$USER_HOME/.claude"
 
@@ -44,4 +43,4 @@ BASHRC
 chown $USERNAME:$USERNAME "$USER_HOME/.bashrc"
 
 # Own /workspace as the non-root user
-chown -R $USERNAME:$USERNAME /workspace
+chown -R $USERNAME:$USERNAME /workspace || true

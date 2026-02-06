@@ -25,7 +25,7 @@ class PodManager:
     min_memory_gb: int = 100
     template_id: str = "runpod-torch-v240"
     container_disk_gb: int = 20
-    docker_args: str = "bash -c 'ln -sf /workspace/init/init.sh /pre_start.sh && /start.sh'"
+    docker_args: str = "bash -c 'bash /workspace/init/init.sh; exec /start.sh'"
     ssh_user: str = "rrenaud"
     vscode_start_dir: str = "/workspace"
 
