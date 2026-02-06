@@ -6,6 +6,7 @@ Subclass and override class attributes (gpu_type_id, pod_name_prefix, etc.)
 to create GPU-specific launchers.
 """
 
+import argparse
 import os
 import sys
 import time
@@ -347,12 +348,66 @@ Host {ssh_host_alias}
         print(f"  Visit https://runpod.io/console/pods")
         print("=" * 60)
 
+    def get_all_pods(self):
+        """Get all pods via GraphQL API."""
+        query = """
+        query Pods {
+          myself {
+            pods {
+              id
+              name
+              desiredStatus
+            }
+          }
+        }
+        """
+        result = self.graphql_request(query)
+        return result["data"]["myself"]["pods"]
+
+    def terminate_pod(self, pod_id: str):
+        """Terminate a pod by ID."""
+        mutation = """
+        mutation PodTerminate($input: PodTerminateInput!) {
+          podTerminate(input: $input)
+        }
+        """
+        self.graphql_request(mutation, {"input": {"podId": pod_id}})
+
+    def kill_existing_pods(self):
+        """Find and terminate all existing pods matching our prefix."""
+        print(f"\nLooking for existing pods with prefix '{self.pod_name_prefix}'...")
+        pods = self.get_all_pods()
+        matched = [p for p in pods if p["name"].startswith(self.pod_name_prefix)]
+
+        if not matched:
+            print("  No existing pods found.")
+            return
+
+        for pod in matched:
+            print(f"  Terminating {pod['name']} ({pod['id']}, status={pod['desiredStatus']})...")
+            self.terminate_pod(pod["id"])
+            print(f"  Terminated.")
+
+    def parse_args(self):
+        """Parse command-line arguments."""
+        parser = argparse.ArgumentParser(description=f"Launch a {self.gpu_type_id} pod on RunPod")
+        parser.add_argument(
+            "--kill-existing", action="store_true",
+            help="Terminate existing pods with the same name prefix before launching",
+        )
+        return parser.parse_args()
+
     def run(self):
         """Main execution flow."""
         try:
+            args = self.parse_args()
+
             print("=" * 60)
             print(f"RunPod {self.gpu_type_id} Pod Launcher")
             print("=" * 60)
+
+            if args.kill_existing:
+                self.kill_existing_pods()
 
             pod_id = self.create_pod()
             self.wait_for_pod_running(pod_id)

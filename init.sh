@@ -12,7 +12,7 @@ groupadd -g $USER_GID $USERNAME 2>/dev/null || true
 useradd -m -u $USER_UID -g $USER_GID -s /bin/bash $USERNAME 2>/dev/null || true
 
 # Passwordless sudo
-apt-get update -qq && apt-get install -y -qq sudo tmux nano bat > /dev/null 2>&1 || true
+apt-get update -qq && apt-get install -y -qq sudo tmux nano bat less > /dev/null 2>&1 || true
 echo "$USERNAME ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/$USERNAME
 
 # SSH access for non-root user (reuses RunPod's PUBLIC_KEY env var)
@@ -53,6 +53,21 @@ chown $USERNAME:$USERNAME "$USER_HOME/.bashrc"
 
 # Own /workspace as the non-root user
 chown -R $USERNAME:$USERNAME /workspace || true
+
+# VSCode Remote settings: default terminal attaches to tmux claude session
+mkdir -p /workspace/.vscode
+cat > /workspace/.vscode/settings.json <<'VSCODE'
+{
+  "terminal.integrated.profiles.linux": {
+    "tmux-claude": {
+      "path": "tmux",
+      "args": ["attach", "-t", "claude"]
+    }
+  },
+  "terminal.integrated.defaultProfile.linux": "tmux-claude"
+}
+VSCODE
+chown -R $USERNAME:$USERNAME /workspace/.vscode || true
 
 # Launch Claude Code in a tmux session
 su - $USERNAME -c 'tmux new-session -d -s claude -c /workspace "claude --dangerously-skip-permissions"' || true
