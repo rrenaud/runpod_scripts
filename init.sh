@@ -39,6 +39,12 @@ chown $USERNAME:$USERNAME "$CLAUDE_PERSIST" || true
 ln -sfn "$CLAUDE_PERSIST" "$USER_HOME/.claude"
 chown -h $USERNAME:$USERNAME "$USER_HOME/.claude"
 
+# Persistent .netrc (wandb API key etc): symlink ~/.netrc -> /workspace/.netrc
+if [ -f /workspace/.netrc ]; then
+    ln -sfn /workspace/.netrc "$USER_HOME/.netrc"
+    chown -h $USERNAME:$USERNAME "$USER_HOME/.netrc"
+fi
+
 # Git identity and credentials
 su - $USERNAME -c 'git config --global user.email "rrenaud@gmail.com"'
 su - $USERNAME -c 'git config --global user.name "Rob Neuhaus"'
