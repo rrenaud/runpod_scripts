@@ -57,6 +57,10 @@ export PAGER="less"
 if command -v batcat &> /dev/null; then
     alias bat='batcat'
 fi
+# Auto-attach to claude tmux session if no one else is attached
+if [ -z "$TMUX" ] && tmux has-session -t claude 2>/dev/null && [ "$(tmux list-clients -t claude 2>/dev/null | wc -l)" -eq 0 ]; then
+    exec tmux attach -t claude
+fi
 BASHRC
 chown $USERNAME:$USERNAME "$USER_HOME/.bashrc"
 
@@ -72,8 +76,7 @@ cat > /workspace/.vscode/settings.json <<'VSCODE'
       "path": "tmux",
       "args": ["attach", "-t", "claude"]
     }
-  },
-  "terminal.integrated.defaultProfile.linux": "tmux-claude"
+  }
 }
 VSCODE
 chown -R $USERNAME:$USERNAME /workspace/.vscode || true
