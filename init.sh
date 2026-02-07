@@ -4,12 +4,13 @@
 # Run explicitly via bash in dockerArgs before /start.sh.
 
 USERNAME="rrenaud"
-USER_UID=1000
-USER_GID=1000
 
-# Create user with fixed UID (idempotent)
-groupadd -g $USER_GID $USERNAME 2>/dev/null || true
-useradd -m -u $USER_UID -g $USER_GID -s /bin/bash $USERNAME 2>/dev/null || true
+# Create user (idempotent). Try UID 1000, fall back to system-assigned if taken.
+if ! id "$USERNAME" &>/dev/null; then
+    groupadd -g 1000 $USERNAME 2>/dev/null || groupadd $USERNAME 2>/dev/null || true
+    useradd -m -u 1000 -g $USERNAME -s /bin/bash $USERNAME 2>/dev/null \
+        || useradd -m -g $USERNAME -s /bin/bash $USERNAME 2>/dev/null || true
+fi
 
 # Passwordless sudo
 apt-get update -qq && apt-get install -y -qq sudo tmux nano bat less > /dev/null 2>&1 || true
