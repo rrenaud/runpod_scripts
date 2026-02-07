@@ -11,6 +11,7 @@ class RTXPRO6000PodManager(PodManager):
     datacenter_id = ""
     min_vcpu = 8
     min_memory_gb = 30
+    template_id = "runpod-torch-v280"  # Blackwell needs CUDA 12.8+
     vscode_start_dir = "/workspace"
 
 
