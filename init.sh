@@ -34,6 +34,15 @@ if ! command -v git-lfs &>/dev/null; then
 fi
 git lfs install 2>/dev/null || true
 
+# Install GitHub CLI
+if ! command -v gh &>/dev/null; then
+    curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+        | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg 2>/dev/null
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
+        > /etc/apt/sources.list.d/github-cli.list
+    apt-get update -qq && apt-get install -y -qq gh > /dev/null 2>&1 || true
+fi
+
 # Install Node.js (required by Claude Code)
 if ! command -v node &>/dev/null; then
     curl -fsSL https://deb.nodesource.com/setup_22.x | bash - > /dev/null 2>&1
