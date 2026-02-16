@@ -45,6 +45,9 @@ if ! su - $USERNAME -c 'command -v claude' &>/dev/null; then
     su - $USERNAME -c 'curl -fsSL https://claude.ai/install.sh | bash' || true
 fi
 
+# Install wandb
+pip install wandb > /dev/null 2>&1 || true
+
 # Persistent Claude config: symlink ~/.claude -> /workspace/.claude_home
 CLAUDE_PERSIST="/workspace/.claude_home"
 mkdir -p "$CLAUDE_PERSIST"
@@ -76,6 +79,7 @@ export PAGER="less"
 if command -v batcat &> /dev/null; then
     alias bat='batcat'
 fi
+alias yolo='claude --dangerously-skip-permissions'
 # Auto-attach to claude tmux session if no one else is attached
 if [ -z "$TMUX" ] && tmux has-session -t claude 2>/dev/null && [ "$(tmux list-clients -t claude 2>/dev/null | wc -l)" -eq 0 ]; then
     exec tmux attach -t claude
