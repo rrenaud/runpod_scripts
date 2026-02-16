@@ -28,6 +28,12 @@ if [ -n "$PUBLIC_KEY" ]; then
     chown -R $USERNAME:$USERNAME "$USER_HOME/.ssh"
 fi
 
+# Install Git LFS
+if ! command -v git-lfs &>/dev/null; then
+    apt-get update -qq && apt-get install -y -qq git-lfs > /dev/null 2>&1 || true
+fi
+git lfs install 2>/dev/null || true
+
 # Install Node.js (required by Claude Code)
 if ! command -v node &>/dev/null; then
     curl -fsSL https://deb.nodesource.com/setup_22.x | bash - > /dev/null 2>&1
