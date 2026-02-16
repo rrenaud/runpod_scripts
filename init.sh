@@ -13,7 +13,9 @@ if ! id "$USERNAME" &>/dev/null; then
 fi
 
 # Passwordless sudo
-apt-get update -qq && apt-get install -y -qq sudo tmux nano bat less > /dev/null 2>&1 || true
+if ! command -v tmux &>/dev/null || ! command -v batcat &>/dev/null; then
+    apt-get update -qq && apt-get install -y -qq sudo tmux nano bat less > /dev/null 2>&1 || true
+fi
 echo "$USERNAME ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/$USERNAME
 
 # SSH access for non-root user (reuses RunPod's PUBLIC_KEY env var)
@@ -27,11 +29,15 @@ if [ -n "$PUBLIC_KEY" ]; then
 fi
 
 # Install Node.js (required by Claude Code)
-curl -fsSL https://deb.nodesource.com/setup_22.x | bash - > /dev/null 2>&1
-apt-get install -y -qq nodejs > /dev/null 2>&1 || true
+if ! command -v node &>/dev/null; then
+    curl -fsSL https://deb.nodesource.com/setup_22.x | bash - > /dev/null 2>&1
+    apt-get install -y -qq nodejs > /dev/null 2>&1 || true
+fi
 
-# Install Claude Code for the user
-su - $USERNAME -c 'curl -fsSL https://claude.ai/install.sh | bash' || true
+# Install Claude Code for the user (skip if already installed)
+if ! su - $USERNAME -c 'command -v claude' &>/dev/null; then
+    su - $USERNAME -c 'curl -fsSL https://claude.ai/install.sh | bash' || true
+fi
 
 # Persistent Claude config: symlink ~/.claude -> /workspace/.claude_home
 CLAUDE_PERSIST="/workspace/.claude_home"

@@ -7,7 +7,7 @@ to create GPU-specific launchers.
 """
 
 import argparse
-import os
+import re
 import sys
 import time
 import subprocess
@@ -19,11 +19,12 @@ from typing import Optional, Tuple, Dict, Any
 class PodManager:
     # --- Override these in subclasses ---
     gpu_type_id: str = "NVIDIA A100 80GB PCIe"
+    gpu_count: int = 1
     pod_name_prefix: str = "pod"
     network_volume_id: str = ""
     datacenter_id: str = ""
     min_vcpu: int = 8
-    min_memory_gb: int = 100
+    min_memory_gb: int = 30
     template_id: str = "runpod-torch-v240"
     container_disk_gb: int = 20
     docker_args: str = "bash -c 'bash /workspace/init/init.sh; exec /start.sh'"
@@ -52,7 +53,6 @@ class PodManager:
             self.ssh_public_key = ""
 
         # Generate pod name with timestamp
-        self.gpu_count = 1
         self.pod_name = f"{self.pod_name_prefix}-{time.strftime('%Y%m%d-%H%M%S')}"
         self.volume_gb = 0  # No separate volume when using network volume
         self.ports = "22/tcp,8888/http"
@@ -60,6 +60,7 @@ class PodManager:
 
     def graphql_request(self, query: str, variables: Optional[Dict] = None) -> Dict[str, Any]:
         """Make a GraphQL request to RunPod API."""
+        # RunPod's API requires the key as a query param (no header auth supported)
         response = requests.post(
             "https://api.runpod.io/graphql",
             headers={"Content-Type": "application/json"},
@@ -79,19 +80,7 @@ class PodManager:
     def create_pod(self) -> str:
         """Create the RunPod pod using GraphQL API and return its ID."""
         print(f"\nCreating {self.gpu_type_id} pod...")
-        print(f"  GPU Type: {self.gpu_type_id}")
-        print(f"  GPU Count: {self.gpu_count}")
-        print(f"  Datacenter: {self.datacenter_id}")
-        print(f"  Template: {self.template_id}")
-        print(f"  Pod Name: {self.pod_name}")
-        print(f"  Container Disk: {self.container_disk_gb} GB")
-        print(f"  Network Volume: {self.network_volume_id}")
-        print(f"  Public IP: Enabled")
-        print(f"  Ports: {self.ports}")
-        print(f"  SSH User: {self.ssh_user}")
-        if self.ssh_public_key:
-            key_preview = self.ssh_public_key[:50] + "..."
-            print(f"  SSH Public Key: {key_preview}")
+        self.print_config()
 
         mutation = """
         mutation PodFindAndDeployOnDemand($input: PodFindAndDeployOnDemandInput!) {
@@ -120,7 +109,6 @@ class PodManager:
             "minMemoryInGb": self.min_memory_gb,
             "gpuTypeId": self.gpu_type_id,
             "name": self.pod_name,
-            "dataCenterId": self.datacenter_id,
             "templateId": self.template_id,
             "ports": self.ports,
             "volumeMountPath": self.volume_mount_path,
@@ -129,6 +117,8 @@ class PodManager:
             "env": env_vars,
         }
 
+        if self.datacenter_id:
+            input_data["dataCenterId"] = self.datacenter_id
         if self.docker_args:
             input_data["dockerArgs"] = self.docker_args
 
@@ -243,6 +233,19 @@ class PodManager:
         print("  Error: Could not get SSH connection details within timeout period")
         sys.exit(1)
 
+    def _clean_stale_ssh_config(self):
+        """Remove old runpod-* entries from SSH config."""
+        if not self.ssh_config_path.exists():
+            return
+        content = self.ssh_config_path.read_text()
+        # Remove blocks: "# RunPod Pod: ..." through the next blank line or end
+        cleaned = re.sub(
+            r'\n# RunPod Pod: [^\n]*\nHost runpod-[^\n]*\n(?:    [^\n]*\n)*',
+            '', content
+        )
+        if cleaned != content:
+            self.ssh_config_path.write_text(cleaned)
+
     def add_to_known_hosts(self, ssh_host: str, ssh_port: str):
         """Add the pod to SSH known_hosts."""
         print("\nAdding pod to SSH known_hosts...")
@@ -263,7 +266,9 @@ class PodManager:
             print(f"  Could not add to known_hosts ({e}), but continuing...")
 
     def update_ssh_config(self, pod_id: str, ssh_host: str, ssh_port: str) -> str:
-        """Add SSH config entry for the pod."""
+        """Remove stale runpod entries and add SSH config entry for the pod."""
+        self._clean_stale_ssh_config()
+
         ssh_host_alias = f"runpod-{pod_id}"
         print(f"\nAdding SSH config entry as '{ssh_host_alias}'...")
 
@@ -395,7 +400,23 @@ Host {ssh_host_alias}
             "--kill-existing", action="store_true",
             help="Terminate existing pods with the same name prefix before launching",
         )
+        parser.add_argument(
+            "--dry-run", action="store_true",
+            help="Print configuration and exit without creating a pod",
+        )
         return parser.parse_args()
+
+    def print_config(self):
+        """Print the pod configuration."""
+        print(f"  GPU Type: {self.gpu_type_id}")
+        print(f"  GPU Count: {self.gpu_count}")
+        print(f"  Datacenter: {self.datacenter_id or '(any)'}")
+        print(f"  Template: {self.template_id}")
+        print(f"  Pod Name: {self.pod_name}")
+        print(f"  Container Disk: {self.container_disk_gb} GB")
+        print(f"  Network Volume: {self.network_volume_id}")
+        print(f"  Ports: {self.ports}")
+        print(f"  SSH User: {self.ssh_user}")
 
     def run(self):
         """Main execution flow."""
@@ -405,6 +426,11 @@ Host {ssh_host_alias}
             print("=" * 60)
             print(f"RunPod {self.gpu_type_id} Pod Launcher")
             print("=" * 60)
+
+            if args.dry_run:
+                print("\n[DRY RUN] Would create pod with:")
+                self.print_config()
+                return
 
             if args.kill_existing:
                 self.kill_existing_pods()

@@ -9,7 +9,6 @@ class A100PodManager(PodManager):
     pod_name_prefix = "a100-pcie-pod"
     network_volume_id = "v8du7ep4yk"  # superbpe 500GB
     datacenter_id = "CA-MTL-3"
-    min_vcpu = 8
     min_memory_gb = 100
     vscode_start_dir = "/workspace/assignment5-alignment"
 
