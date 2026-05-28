@@ -57,9 +57,17 @@ class PodManager:
         self.volume_gb = 0  # No separate volume when using network volume
         self.ports = "22/tcp,8888/http"
         self.volume_mount_path = "/workspace"
+        self.launch_vscode_enabled = True
 
-    def graphql_request(self, query: str, variables: Optional[Dict] = None) -> Dict[str, Any]:
-        """Make a GraphQL request to RunPod API."""
+    def graphql_request(
+        self, query: str, variables: Optional[Dict] = None, raise_on_errors: bool = True
+    ) -> Dict[str, Any]:
+        """Make a GraphQL request to RunPod API.
+
+        With raise_on_errors=False, GraphQL-level errors are returned in the
+        payload instead of raised, so callers can inspect error codes (e.g. to
+        retry under a different mutation name).
+        """
         # RunPod's API requires the key as a query param (no header auth supported)
         response = requests.post(
             "https://api.runpod.io/graphql",
@@ -68,11 +76,11 @@ class PodManager:
             json={"query": query, "variables": variables or {}},
         )
 
-        if response.status_code != 200:
+        if response.status_code != 200 and raise_on_errors:
             raise Exception(f"HTTP {response.status_code}: {response.text}")
 
         data = response.json()
-        if "errors" in data:
+        if "errors" in data and raise_on_errors:
             raise Exception(f"GraphQL errors: {data['errors']}")
 
         return data
@@ -362,12 +370,47 @@ Host {ssh_host_alias}
               id
               name
               desiredStatus
+              gpuCount
+              costPerHr
+              machine { gpuDisplayName }
+              runtime { uptimeInSeconds }
             }
           }
         }
         """
         result = self.graphql_request(query)
         return result["data"]["myself"]["pods"]
+
+    def get_suspended_pods(self):
+        """Return pods that are suspended (EXITED status, no active runtime)."""
+        return [
+            p for p in self.get_all_pods()
+            if p["desiredStatus"] == "EXITED" and not p["runtime"]
+        ]
+
+    def resume_pod(self, pod_id: str, gpu_count: int) -> Dict[str, Any]:
+        """Resume a suspended pod by ID. Returns the resumed pod data."""
+        # Mirror create_network_volume.py: try subject-first naming, fall back.
+        attempts = [
+            ("podResume", "PodResumeInput"),
+            ("resumePod", "ResumePodInput"),
+        ]
+        variables = {"input": {"podId": pod_id, "gpuCount": gpu_count}}
+
+        last = None
+        for op_name, input_type in attempts:
+            mutation = (
+                f"mutation Resume($input: {input_type}!) {{ "
+                f"{op_name}(input: $input) {{ id desiredStatus }} }}"
+            )
+            last = self.graphql_request(mutation, variables, raise_on_errors=False)
+            if "errors" not in last:
+                return last["data"][op_name]
+            codes = {e.get("extensions", {}).get("code") for e in last.get("errors", [])}
+            if "GRAPHQL_VALIDATION_FAILED" not in codes:
+                break
+
+        raise Exception(f"Failed to resume pod {pod_id}: {last}")
 
     def terminate_pod(self, pod_id: str):
         """Terminate a pod by ID."""
@@ -418,6 +461,31 @@ Host {ssh_host_alias}
         print(f"  Ports: {self.ports}")
         print(f"  SSH User: {self.ssh_user}")
 
+    def _connect_after_start(self, pod_id: str):
+        """Shared post-start flow: wait for running, set up SSH, launch VSCode."""
+        self.wait_for_pod_running(pod_id)
+        ssh_host, ssh_port = self.get_ssh_details(pod_id)
+        self.add_to_known_hosts(ssh_host, ssh_port)
+        ssh_host_alias = self.update_ssh_config(pod_id, ssh_host, ssh_port)
+        self.test_ssh_connection(ssh_host, ssh_port)
+        if self.launch_vscode_enabled:
+            self.launch_vscode(ssh_host_alias)
+        self.print_summary(pod_id, ssh_host_alias, ssh_host, ssh_port)
+
+    def create_and_connect(self, kill_existing: bool = False):
+        """Create a new pod and connect to it."""
+        if kill_existing:
+            self.kill_existing_pods()
+        pod_id = self.create_pod()
+        self._connect_after_start(pod_id)
+
+    def resume_and_connect(self, pod_id: str, gpu_count: int):
+        """Resume a suspended pod and connect to it."""
+        print(f"\nResuming pod {self.pod_name} ({pod_id}) with {gpu_count} GPU(s)...")
+        self.resume_pod(pod_id, gpu_count)
+        print("  Resume requested.")
+        self._connect_after_start(pod_id)
+
     def run(self):
         """Main execution flow."""
         try:
@@ -432,17 +500,7 @@ Host {ssh_host_alias}
                 self.print_config()
                 return
 
-            if args.kill_existing:
-                self.kill_existing_pods()
-
-            pod_id = self.create_pod()
-            self.wait_for_pod_running(pod_id)
-            ssh_host, ssh_port = self.get_ssh_details(pod_id)
-            self.add_to_known_hosts(ssh_host, ssh_port)
-            ssh_host_alias = self.update_ssh_config(pod_id, ssh_host, ssh_port)
-            self.test_ssh_connection(ssh_host, ssh_port)
-            self.launch_vscode(ssh_host_alias)
-            self.print_summary(pod_id, ssh_host_alias, ssh_host, ssh_port)
+            self.create_and_connect(kill_existing=args.kill_existing)
 
         except KeyboardInterrupt:
             print("\n\n  Operation cancelled by user")

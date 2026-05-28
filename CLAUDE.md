@@ -36,7 +36,11 @@
 - Launch VSCode only after SSH is confirmed ready
 
 ## Repo Structure
-- `pod_manager.py` — shared PodManager base class (includes `--kill-existing` flag)
-- `start_3090_pod.py` — 3090 launcher (template v240, CUDA 12.4)
-- `start_rtx_pro_6000_pod.py` — RTX PRO 6000 Blackwell launcher (template v280, CUDA 12.8)
+- `pod.py` — unified CLI; preferred entry point. Subcommands:
+  - `pod.py list` — all pods with status (SUSPENDED/RUNNING), gpu, $/hr
+  - `pod.py create <gpu>` — create a pod (`<gpu>`: a100-emo, a100-pcie, 3090, 3090x3, rtx-pro-6000). Flags: `--kill-existing`, `--dry-run`, `--no-vscode`
+  - `pod.py resume [target]` — resume a suspended pod (id or name substring; optional when exactly one is suspended). Flags: `--gpu-count`, `--dry-run`, `--no-vscode`
+- `pod_manager.py` — shared PodManager base class. Create flow: `create_and_connect`; resume flow: `resume_and_connect` → `resume_pod` (uses RunPod `podResume` mutation, dual-name fallback). `_connect_after_start` is shared by both. `get_all_pods`/`get_suspended_pods` for listing. Suspended pod = `desiredStatus == "EXITED"` and `runtime == null`.
+- `start_*.py` — per-GPU config subclasses (gpu type, network volume, datacenter, template). Still runnable standalone; `pod.py` imports their classes into its registry.
+  - `start_3090_pod.py` (template v240, CUDA 12.4), `start_rtx_pro_6000_pod.py` (RTX PRO 6000 Blackwell, template v280, CUDA 12.8), `start_a100_pod.py`, `start_a100_pod_emo.py`, `start_3090x3_pod.py`
 - `init.sh` — pod initialization script (user setup, Node.js, Claude Code, tmux, SSH)
