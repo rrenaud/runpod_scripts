@@ -19,10 +19,12 @@ from start_3090_pod import RTX3090PodManager
 from start_3090x3_pod import RTX3090x3PodManager
 from start_a100_pod import A100PodManager
 from start_a100_pod_emo import A100EmoPodManager
+from start_h100_pod_emo import H100EmoPodManager
 from start_rtx_pro_6000_pod import RTXPRO6000PodManager
 
 REGISTRY = {
     "a100-emo": A100EmoPodManager,
+    "h100-emo": H100EmoPodManager,
     "a100-pcie": A100PodManager,
     "3090": RTX3090PodManager,
     "3090x3": RTX3090x3PodManager,
@@ -53,6 +55,9 @@ def cmd_list(args) -> int:
 def cmd_create(args) -> int:
     mgr = REGISTRY[args.gpu]()
     mgr.launch_vscode_enabled = not args.no_vscode
+    if args.no_init:
+        mgr.docker_args = ""   # skip volume init.sh; template default runs /start.sh
+        mgr.ssh_user = "root"  # init.sh creates the rrenaud user, so connect as root
     if args.dry_run:
         print(f"[DRY RUN] Would create '{args.gpu}' pod with:")
         mgr.print_config()
@@ -139,6 +144,8 @@ def main() -> int:
                           help="Print config and exit without creating")
     p_create.add_argument("--no-vscode", action="store_true",
                           help="Skip launching VSCode after the pod is ready")
+    p_create.add_argument("--no-init", action="store_true",
+                          help="Skip init.sh (no rrenaud/Claude setup); boot vanilla, connect as root")
 
     p_resume = sub.add_parser("resume", help="Resume a suspended pod")
     p_resume.add_argument("target", nargs="?",

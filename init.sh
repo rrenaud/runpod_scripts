@@ -96,9 +96,6 @@ fi
 BASHRC
 chown $USERNAME:$USERNAME "$USER_HOME/.bashrc"
 
-# Own /workspace as the non-root user
-chown -R $USERNAME:$USERNAME /workspace || true
-
 # VSCode Remote settings: default terminal attaches to tmux claude session
 mkdir -p /workspace/.vscode
 cat > /workspace/.vscode/settings.json <<'VSCODE'

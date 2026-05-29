@@ -298,8 +298,13 @@ Host {ssh_host_alias}
         print("  SSH config updated!")
         return ssh_host_alias
 
-    def test_ssh_connection(self, ssh_host: str, ssh_port: str, max_attempts: int = 30) -> bool:
-        """Poll SSH connection until it succeeds or we give up."""
+    def test_ssh_connection(self, ssh_host: str, ssh_port: str, max_attempts: int = 120) -> bool:
+        """Poll SSH connection until it succeeds or we give up.
+
+        Generous default: docker_args runs init.sh to completion before /start.sh
+        launches sshd, so SSH only comes up after all first-boot installs finish
+        (can be several minutes on a fresh container disk).
+        """
         print("\nWaiting for SSH service to be ready...")
 
         cmd = [
@@ -462,14 +467,24 @@ Host {ssh_host_alias}
         print(f"  SSH User: {self.ssh_user}")
 
     def _connect_after_start(self, pod_id: str):
-        """Shared post-start flow: wait for running, set up SSH, launch VSCode."""
+        """Shared post-start flow: wait for running, set up SSH, launch VSCode.
+
+        known_hosts and VSCode are handled only after SSH is confirmed reachable.
+        On first boot init.sh can take several minutes, and acting before SSH is
+        up makes ssh-keyscan fail and VSCode connect to a dead port.
+        """
         self.wait_for_pod_running(pod_id)
         ssh_host, ssh_port = self.get_ssh_details(pod_id)
-        self.add_to_known_hosts(ssh_host, ssh_port)
         ssh_host_alias = self.update_ssh_config(pod_id, ssh_host, ssh_port)
-        self.test_ssh_connection(ssh_host, ssh_port)
-        if self.launch_vscode_enabled:
-            self.launch_vscode(ssh_host_alias)
+        ssh_ready = self.test_ssh_connection(ssh_host, ssh_port)
+        if ssh_ready:
+            self.add_to_known_hosts(ssh_host, ssh_port)
+            if self.launch_vscode_enabled:
+                self.launch_vscode(ssh_host_alias)
+        elif self.launch_vscode_enabled:
+            print("\n  SSH not ready yet — skipping VSCode launch.")
+            print(f"  Once it responds, run: "
+                  f"code --remote ssh-remote+{ssh_host_alias} {self.vscode_start_dir}")
         self.print_summary(pod_id, ssh_host_alias, ssh_host, ssh_port)
 
     def create_and_connect(self, kill_existing: bool = False):
