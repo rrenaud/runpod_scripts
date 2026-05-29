@@ -10,6 +10,7 @@ class H100EmoPodManager(PodManager):
     network_volume_id = "cfg8twslls"  # 200 GB "emo" volume in US-MO-1
     datacenter_id = "US-MO-1"
     min_memory_gb = 100
+    container_disk_gb = 10  # ephemeral root fs only; data lives on the network volume
     vscode_start_dir = "/workspace/EMO"
 
 
